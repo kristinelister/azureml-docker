@@ -1,41 +1,36 @@
-FROM debian:latest
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
 
+FROM ubuntu:16.04
 
-#Mostly copied from https://hub.docker.com/r/continuumio/miniconda/dockerfile :)
-#added some gdal and other packages
-
-#  $ docker build . -t continuumio/miniconda:latest -t continuumio/miniconda:4.5.11 -t continuumio/miniconda2:latest -t continuumio/miniconda2:4.5.11
-#  $ docker run --rm -it continuumio/miniconda2:latest /bin/bash
-#  $ docker push continuumio/miniconda:latest
-#  $ docker push continuumio/miniconda:4.5.11
-#  $ docker push continuumio/miniconda2:latest
-#  $ docker push continuumio/miniconda2:4.5.11
+USER root:root
 
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
-ENV PATH /opt/conda/bin:$PATH
+ENV DEBIAN_FRONTEND noninteractive
 
-RUN apt-get update --fix-missing && apt-get install -y wget bzip2 ca-certificates \
-    libglib2.0-0 libxext6 libsm6 libxrender1 \
-    git mercurial subversion
-
-RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda2-4.5.11-Linux-x86_64.sh -O ~/miniconda.sh && \
-    /bin/bash ~/miniconda.sh -b -p /opt/conda && \
-    rm ~/miniconda.sh && \
-    ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh && \
-    echo ". /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc && \
-    echo "conda activate base" >> ~/.bashrc
-
-RUN apt-get install -y curl grep sed dpkg && \
-    TINI_VERSION=`curl https://github.com/krallin/tini/releases/latest | grep -o "/v.*\"" | sed 's:^..\(.*\).$:\1:'` && \
-    curl -L "https://github.com/krallin/tini/releases/download/v${TINI_VERSION}/tini_${TINI_VERSION}.deb" > tini.deb && \
-    dpkg -i tini.deb && \
-    rm tini.deb && \
-    apt-get clean
-
-
-RUN apt-get install python3-pip python3-dev build-essential -y
-RUN pip3 install --upgrade pip
-
+# Install Common Dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    # SSH and RDMA
+    libmlx4-1 \
+    libmlx5-1 \
+    librdmacm1 \
+    libibverbs1 \
+    libmthca1 \
+    libdapl2 \
+    dapl2-utils \
+    openssh-client \
+    openssh-server \
+    iproute2 && \
+    # Others
+    apt-get install -y \
+    build-essential \
+    bzip2 \
+    git=1:2.7.4-0ubuntu1.6 \
+    wget \
+    cpio && \
+    apt-get clean -y && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN apt-get install -y binutils libproj-dev gdal-bin libgdal-dev 
 RUN apt-get -y install python-gdal
@@ -44,14 +39,25 @@ RUN export CPLUS_INCLUDE_PATH=/usr/include/gdal
 
 RUN export C_INCLUDE_PATH=/usr/include/gdal
 
-RUN conda install -c conda-forge pytables gdal numpy pandas rasterio
+# Conda Environment
+ENV MINICONDA_VERSION 4.5.11
+ENV PATH /opt/miniconda/bin:$PATH
+RUN wget -qO /tmp/miniconda.sh https://repo.continuum.io/miniconda/Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh && \
+    bash /tmp/miniconda.sh -bf -p /opt/miniconda && \
+    conda clean -ay && \
+    rm -rf /opt/miniconda/pkgs && \
+    rm /tmp/miniconda.sh && \
+    find / -type d -name __pycache__ | xargs rm -rf
 
-#RUN pip3 install GDAL==2.2.4
-
-
-
-RUN pip3 install argparse multiprocess tqdm sklearn learn2map
-
-
-ENTRYPOINT [ "/usr/bin/tini", "--" ]
-CMD [ "/bin/bash" ]
+# Open-MPI installation
+ENV OPENMPI_VERSION 3.1.2
+RUN mkdir /tmp/openmpi && \
+    cd /tmp/openmpi && \
+    wget https://download.open-mpi.org/release/open-mpi/v3.1/openmpi-${OPENMPI_VERSION}.tar.gz && \
+    tar zxf openmpi-${OPENMPI_VERSION}.tar.gz && \
+    cd openmpi-${OPENMPI_VERSION} && \
+    ./configure --enable-orterun-prefix-by-default && \
+    make -j $(nproc) all && \
+    make install && \
+    ldconfig && \
+    rm -rf /tmp/openmpi
