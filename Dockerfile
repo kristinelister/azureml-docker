@@ -1,86 +1,57 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT License.
+FROM debian:latest
 
-FROM ubuntu:16.04
 
-USER root:root
+#Mostly copied from https://hub.docker.com/r/continuumio/miniconda/dockerfile :)
+#added some gdal and other packages
+
+#  $ docker build . -t continuumio/miniconda:latest -t continuumio/miniconda:4.5.11 -t continuumio/miniconda2:latest -t continuumio/miniconda2:4.5.11
+#  $ docker run --rm -it continuumio/miniconda2:latest /bin/bash
+#  $ docker push continuumio/miniconda:latest
+#  $ docker push continuumio/miniconda:4.5.11
+#  $ docker push continuumio/miniconda2:latest
+#  $ docker push continuumio/miniconda2:4.5.11
 
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
-ENV DEBIAN_FRONTEND noninteractive
+ENV PATH /opt/conda/bin:$PATH
 
-# Update base container install
-RUN apt-get update
-RUN apt-get upgrade -y
+RUN apt-get update --fix-missing && apt-get install -y wget bzip2 ca-certificates \
+    libglib2.0-0 libxext6 libsm6 libxrender1 \
+    git mercurial subversion
 
-# Add unstable repo to allow us to access latest GDAL builds
-RUN echo deb http://ftp.uk.debian.org/debian unstable main contrib non-free >> /etc/apt/sources.list
-RUN apt-get update
+RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda2-4.5.11-Linux-x86_64.sh -O ~/miniconda.sh && \
+    /bin/bash ~/miniconda.sh -b -p /opt/conda && \
+    rm ~/miniconda.sh && \
+    ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh && \
+    echo ". /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc && \
+    echo "conda activate base" >> ~/.bashrc
 
-# Existing binutils causes a dependency conflict, correct version will be installed when GDAL gets intalled
-RUN apt-get remove -y binutils
-
-# Install GDAL dependencies
-RUN apt-get -t unstable install -y libgdal-dev g++
-
-RUN apt install -y gdal-bin python-gdal python3-gdal
-
+RUN apt-get install -y curl grep sed dpkg && \
+    TINI_VERSION=`curl https://github.com/krallin/tini/releases/latest | grep -o "/v.*\"" | sed 's:^..\(.*\).$:\1:'` && \
+    curl -L "https://github.com/krallin/tini/releases/download/v${TINI_VERSION}/tini_${TINI_VERSION}.deb" > tini.deb && \
+    dpkg -i tini.deb && \
+    rm tini.deb && \
+    apt-get clean
 
 
-# Update C env vars so compiler can find gdal
-ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
-ENV C_INCLUDE_PATH=/usr/include/gdal
+RUN apt-get install python3-pip python3-dev build-essential -y
+RUN pip3 install --upgrade pip
 
-# This will install GDAL 2.2.4
-RUN pip install GDAL==2.2.4
 
-RUN pip install numpy pandas argparse multiprocess tqdm sklearn gdal rasterio learn2map
+RUN apt-get install -y binutils libproj-dev gdal-bin libgdal-dev 
+RUN apt-get -y install python-gdal
 
-# Install Common Dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    # SSH and RDMA
-    libmlx4-1 \
-    libmlx5-1 \
-    librdmacm1 \
-    libibverbs1 \
-    libmthca1 \
-    libdapl2 \
-    dapl2-utils \
-    openssh-client \
-    openssh-server \
-    iproute2 && \
-    # Others
-    apt-get install -y \
-    build-essential \
-    bzip2 \
-    git=1:2.7.4-0ubuntu1.6 \
-    wget \
-    cpio && \
-    apt-get clean -y && \
-    rm -rf /var/lib/apt/lists/*
+RUN export CPLUS_INCLUDE_PATH=/usr/include/gdal
 
-# Conda Environment
-ENV MINICONDA_VERSION 4.5.11
-ENV PATH /opt/miniconda/bin:$PATH
-RUN wget -qO /tmp/miniconda.sh https://repo.continuum.io/miniconda/Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh && \
-    bash /tmp/miniconda.sh -bf -p /opt/miniconda && \
-    conda clean -ay && \
-    rm -rf /opt/miniconda/pkgs && \
-    rm /tmp/miniconda.sh && \
-    find / -type d -name __pycache__ | xargs rm -rf
+RUN export C_INCLUDE_PATH=/usr/include/gdal
 
-RUN conda install pytables
+RUN conda install -c conda-forge pytables gdal numpy pandas rasterio
 
-# Intel MPI installation
-ENV INTEL_MPI_VERSION 2018.3.222
-ENV PATH $PATH:/opt/intel/compilers_and_libraries/linux/mpi/bin64
-RUN cd /tmp && \
-    wget -q "http://registrationcenter-download.intel.com/akdlm/irc_nas/tec/13063/l_mpi_${INTEL_MPI_VERSION}.tgz" && \
-    tar zxvf l_mpi_${INTEL_MPI_VERSION}.tgz && \
-    sed -i -e 's/^ACCEPT_EULA=decline/ACCEPT_EULA=accept/g' /tmp/l_mpi_${INTEL_MPI_VERSION}/silent.cfg && \
-    cd /tmp/l_mpi_${INTEL_MPI_VERSION} && \
-    ./install.sh -s silent.cfg --arch=intel64 && \
-    cd / && \
-    rm -rf /tmp/l_mpi_${INTEL_MPI_VERSION}* && \
-    rm -rf /opt/intel/compilers_and_libraries_${INTEL_MPI_VERSION}/linux/mpi/intel64/lib/debug* && \
-    echo "source /opt/intel/compilers_and_libraries_${INTEL_MPI_VERSION}/linux/mpi/intel64/bin/mpivars.sh" >> ~/.bashrc
+#RUN pip3 install GDAL==2.2.4
+
+
+
+RUN pip3 install argparse multiprocess tqdm sklearn learn2map
+
+
+ENTRYPOINT [ "/usr/bin/tini", "--" ]
+CMD [ "/bin/bash" ]
