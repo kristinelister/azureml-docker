@@ -53,8 +53,8 @@ RUN mkdir /tmp/openmpi && \
     ldconfig && \
     rm -rf /tmp/openmpi
 
-RUN apt-get install -y binutils libproj-dev gdal-bin libgdal-dev 
-RUN apt-get -y install python-gdal
+RUN apt-get install -y --allow-unauthenticated binutils libproj-dev gdal-bin libgdal-dev 
+RUN apt-get -y install --allow-unauthenticated python-gdal
 
 RUN export CPLUS_INCLUDE_PATH=/usr/include/gdal
 
