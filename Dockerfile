@@ -16,6 +16,11 @@ RUN apt-get update && \
     libibverbs1 \
     libmthca1 \
     libdapl2 \
+    binutils \
+    libproj-dev \
+    gdal-bin \
+    libgdal-dev \
+    python-gdal \
     dapl2-utils \
     openssh-client \
     openssh-server \
@@ -52,9 +57,6 @@ RUN mkdir /tmp/openmpi && \
     make install && \
     ldconfig && \
     rm -rf /tmp/openmpi
-
-RUN apt-get install -y --allow-unauthenticated binutils libproj-dev gdal-bin libgdal-dev 
-RUN apt-get -y install --allow-unauthenticated python-gdal
 
 RUN export CPLUS_INCLUDE_PATH=/usr/include/gdal
 
