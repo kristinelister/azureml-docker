@@ -1,5 +1,3 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT License.
 
 FROM ubuntu:16.04
 
@@ -32,13 +30,6 @@ RUN apt-get update && \
     apt-get clean -y && \
     rm -rf /var/lib/apt/lists/*
 
-RUN apt-get install -y binutils libproj-dev gdal-bin libgdal-dev 
-RUN apt-get -y install python-gdal
-
-RUN export CPLUS_INCLUDE_PATH=/usr/include/gdal
-
-RUN export C_INCLUDE_PATH=/usr/include/gdal
-
 # Conda Environment
 ENV MINICONDA_VERSION 4.5.11
 ENV PATH /opt/miniconda/bin:$PATH
@@ -61,3 +52,10 @@ RUN mkdir /tmp/openmpi && \
     make install && \
     ldconfig && \
     rm -rf /tmp/openmpi
+
+RUN apt-get install -y binutils libproj-dev gdal-bin libgdal-dev 
+RUN apt-get -y install python-gdal
+
+RUN export CPLUS_INCLUDE_PATH=/usr/include/gdal
+
+RUN export C_INCLUDE_PATH=/usr/include/gdal
